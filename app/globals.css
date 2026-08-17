@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fbfdff;
+  --foreground: #1c2434;
+}
+
+@theme {
+  --font-sans: var(--font-cairo);
+
+  --color-mint-50: #f2faf6;
+  --color-mint-100: #e2f5ec;
+  --color-mint-200: #c5ebd8;
+  --color-mint-300: #9de0be;
+  --color-mint-400: #6dcf9f;
+  --color-mint-500: #44ba81;
+  --color-mint-600: #329968;
+  --color-mint-700: #267a53;
+  --color-mint-800: #1f6143;
+  --color-mint-900: #1b5037;
+
+  --color-sky-50: #f0f7fc;
+  --color-sky-100: #e0f0fa;
+  --color-sky-200: #bae0f5;
+  --color-sky-300: #8ecbeb;
+  --color-sky-400: #5bb2de;
+  --color-sky-500: #389acf;
+  --color-sky-600: #297ca8;
+  --color-sky-700: #226487;
+  --color-sky-800: #1f5570;
+  --color-sky-900: #1e475c;
+
+  --color-cream-50: #fffdf5;
+  --color-cream-100: #fef8db;
+  --color-cream-200: #fdf0b5;
+  --color-cream-300: #fbe584;
+  --color-cream-400: #f9d854;
+  --color-cream-500: #f4c42d;
+  --color-cream-600: #d6a319;
+  --color-cream-700: #ab7f12;
+  --color-cream-800: #876211;
+  --color-cream-900: #6e5012;
+
+  --color-lavender-50: #f9f8fd;
+  --color-lavender-100: #f2eefa;
+  --color-lavender-200: #e4dcf7;
+  --color-lavender-300: #cebff1;
+  --color-lavender-400: #b29de7;
+  --color-lavender-500: #957cdc;
+  --color-lavender-600: #7b60c4;
+  --color-lavender-700: #654ca9;
+  --color-lavender-800: #543f8e;
+  --color-lavender-900: #463575;
+
+  --color-peach-50: #fff9f6;
+  --color-peach-100: #ffeff0;
+  --color-peach-200: #ffdacf;
+  --color-peach-300: #ffbeae;
+  --color-peach-400: #ff9d87;
+  --color-peach-500: #ff765b;
+  --color-peach-600: #e6563e;
+  --color-peach-700: #bf412e;
+  --color-peach-800: #9e3626;
+  --color-peach-900: #822e20;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
