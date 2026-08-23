@@ -59,6 +59,8 @@ export default function ParentRegister() {
 
       const keyDoc = querySnapshot.docs[0];
       const keyDocId = keyDoc.id;
+      const keyData = keyDoc.data();
+      const assignedRole = keyData.role || "parent";
 
       // 3a. Create User with Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -70,7 +72,7 @@ export default function ParentRegister() {
         fullName: fullName.trim(),
         email: email.trim(),
         activationKey: formattedKey,
-        role: "parent",
+        role: assignedRole,
         createdAt: serverTimestamp(),
       });
 
@@ -81,8 +83,14 @@ export default function ParentRegister() {
         usedAt: serverTimestamp(),
       });
 
-      // 3d. Redirect to parent dashboard
-      router.push("/dashboard");
+      // 3d. Set cookie and redirect based on assignedRole
+      document.cookie = `user_role=${assignedRole}; path=/; max-age=86400; SameSite=Lax`;
+
+      if (assignedRole === "psychologist") {
+        router.push("/psychologist/dashboard");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (error: any) {
       console.error("Registration error:", error);
       if (error.code === "auth/email-already-in-use") {

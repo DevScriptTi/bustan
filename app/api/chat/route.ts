@@ -26,41 +26,60 @@ export async function POST(req: Request) {
               stars: childData?.stars ?? stars ?? 0,
               oddCompleted: childData?.oddCompleted ?? completedOddSessions ?? 0,
               memoryCompleted: childData?.memoryCompleted ?? completedMemorySessions ?? 0,
+              behavioralNotes: childData?.behavioralNotes || [],
             },
           ];
 
     const currentActiveChild =
       activeChildName || childName || childrenList[0]?.name || "طفلك";
 
+    const platformDescription = `
+- ODD Program (برنامج اضطراب العناد المتحدي): تقييمات وجلسات علاج سلوكي وتطوير الذات بالتهدئة والتنفس.
+- Memory Program (برنامج الذاكرة والتركيز): تمارين إدراكية وبصرية لتقوية التذكر والانتباه.
+- Kindergarten (روضة بستان): ألعاب تفاعلية (التوصيل والمطابقة، عد الأشكال والنومباد، وتتبع المسارات) لتنمية المهارات الحركية والإدراكية.
+- Reward System (لوحة النجوم والمكافآت): نظام تحفيزي بالرموز والنجوم لاستبدال الإنجازات بمكافآت منزلية وسلوكية.
+`;
+
+    // Inject Behavioral State into Prompt
     const childrenContext = childrenList
-      .map(
-        (child: any) =>
-          `- ${child.name || child.childName || "طفل"}: Stars: ${
-            child.stars ?? 0
-          }, ODD: ${child.oddCompleted ?? child.completedOddSessions ?? 0}/7, Memory: ${
-            child.memoryCompleted ?? child.completedMemorySessions ?? 0
-          }/11.`
-      )
+      .map((c: any) => {
+        let latestNote = "No notes yet";
+        if (Array.isArray(c.behavioralNotes) && c.behavioralNotes.length > 0) {
+          latestNote = c.behavioralNotes[c.behavioralNotes.length - 1]?.note || c.behavioralNotes[c.behavioralNotes.length - 1]?.text || "No notes yet";
+        } else if (typeof c.behavioralNotes === "string") {
+          latestNote = c.behavioralNotes;
+        }
+        return `Name: ${c.name || c.childName || "Child"} | Stars: ${c.stars ?? 0} | Progress: ODD ${
+          c.oddCompleted ?? c.completedOddSessions ?? 0
+        }/7, Memory ${c.memoryCompleted ?? c.completedMemorySessions ?? 0}/11 | Notes: ${latestNote}`;
+      })
       .join("\n");
 
-    const systemInstruction = `You are "Dr. Bustan" (د. بستان), an expert pediatric psychologist and holistic family counselor for the Bustan Platform.
-STRICTLY respond in clear, empathetic, and professional Arabic.
+    const activeChildObj = childrenList.find((c: any) => (c.name || c.childName) === currentActiveChild) || childrenList[0];
+    const psychologistDirectives = activeChildObj?.psychologistDirectives || activeChildObj?.directives || "";
 
-### USER IDENTITY & FAMILY DATA:
-- Parent: ${parentName || "فوزي جعفري"}. (Address him respectfully as a father).
-- Active Child on Dashboard: **${currentActiveChild}**.
+    const systemInstruction = `You are "Dr. Bustan" (د. بستان), the expert clinical AI counselor for the Bustan Platform. You are firm, highly analytical, and deeply empathetic.
+
+### MASTER PROFILE:
+- Parent: ${parentName || "فوزي جعفري"}
+- Active Child in UI: **${currentActiveChild}**
 - All Children Data:
 ${childrenContext}
+- [CLINICAL OVERRIDE FROM HUMAN PSYCHOLOGIST]:
+${psychologistDirectives ? `"${psychologistDirectives}"` : "No specific human directives provided yet."}
+(Note: You MUST strictly prioritize these human doctor instructions above all general advice).
+- Platform Tools Available: 
+${platformDescription}
 
-### RADICAL RULES FOR CONVERSATION FLOW (CRITICAL):
-1. ANSWER THE QUESTION FIRST (CRITICAL): Read the user's exact input carefully. You MUST answer the specific question they asked. Do not pivot to generic advice about routines, sleep, or screen time unless it directly answers their query.
-2. RELEVANCE CHECK (DO NOT FORCE CONTEXT): Only mention the active child, specific progress data, or platform tools IF it logically applies to the user's question. If the father asks a general psychological question (e.g., "How to handle trauma?" / "كيف أساعد أطفالي لتجاوز الصدمات؟"), give a general, expert psychological answer. DO NOT shoehorn "${currentActiveChild}" or "Star Boards" into the answer if it doesn't make sense.
-3. PRONOUN & PLURAL AWARENESS: If the user says "my children" (أبنائي - plural) or asks a general question, answer about children generally or reference all of them. Do not default to the active child unless singular pronouns (he/him/my son/ابني) are used.
-4. PRONOUN TRACKING IN HISTORY: Read the chat history! If the user just asked about "يوسف" in the previous message, and the next message says "He has problems..." (عنده مشاكل), it refers to Youssef. ONLY use the "Active Child on Dashboard" as a default if it's the very first message and no name was mentioned.
-5. NO DATA DUMPING & NO REPETITIVE GREETINGS: Do not list raw stats. Do not greet him in every message. Jump straight to the point.
-6. TONE: Talk like a real, wise, human counselor. Be direct, highly practical, and warm. Avoid generic filler words.`;
+### STRICT DIRECTIVES (CRITICAL):
+1. MANDATORY ANALYSIS (NEVER DODGE QUESTIONS): If the parent asks a broad question like "How are my kids?" or "اخبرني عن حالة ابنائي" or "كيف حال أبنائي؟" or "حالة أطفالي", YOU MUST IMMEDIATELY analyze the 'All Children Data' above and provide a clear, insightful, natural summary of their progress. NEVER dodge the question. NEVER ask "How can I help you?" when you already have their full data.
+2. CONTEXTUAL ANCHORING: If the parent asks a general singular question (e.g., "How do I deal with his anger?" / "كيف أتعامل مع عصبيته؟"), assume they mean the 'Active Child in UI' (**${currentActiveChild}**).
+3. PRESCRIBE PLATFORM TOOLS: Actively recommend platform features based on the problem. If a child lacks focus, recommend the 'Memory Program' or 'Kindergarten Matching Games'. If they misbehave, recommend using the 'Star Reward System'. If they show anger/defiance, recommend the 'ODD Breathing Exercises'.
+4. NATURAL DELIVERY: Do NOT dump raw data or print stats in brackets like "(Stars: 54)". Weave progress into your advice naturally (e.g., "يوسف يقدم أداءً رائعاً وجمع 54 نجمة...").
+5. NO REPETITIVE GREETINGS: You are in an active chat. Jump straight to the answer without saying "Hello" or repeating greeting formulas in every message.
+6. TONE: Warm, wise, expert, highly practical, and empathetic Arabic. Use bullet points and clear short paragraphs.`;
 
-    console.log("[Dr. Bustan Prioritized System Prompt]:\n", systemInstruction);
+    console.log("[Dr. Bustan Pure Chat Prompt]:\n", systemInstruction);
     console.log("[User Input]:", message);
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -68,7 +87,6 @@ ${childrenContext}
     if (apiKey) {
       const genAI = new GoogleGenerativeAI(apiKey);
 
-      // Format chat history for Gemini SDK (roles must be 'user' or 'model')
       const formattedHistory = (history || [])
         .filter((msg: any) => msg.id !== "welcome" && msg.content)
         .map((msg: any) => ({
@@ -76,33 +94,33 @@ ${childrenContext}
           parts: [{ text: msg.content }],
         }));
 
-      // Candidate model names supported by Gemini API v1beta
-      const candidateModels = [
-        "gemini-2.0-flash",
+      // Pure Chat Generation using gemini-3.1-flash-lite
+      const chatModelCandidates = [
+        "gemini-3.1-flash-lite",
+        "gemini-2.0-flash-lite",
         "gemini-1.5-flash-latest",
-        "gemini-1.5-pro-latest",
-        "gemini-1.5-pro",
+        "gemini-1.5-flash",
         "gemini-pro",
       ];
 
-      for (const modelName of candidateModels) {
+      for (const cModelName of chatModelCandidates) {
         try {
-          const model = genAI.getGenerativeModel({
-            model: modelName,
+          const chatModel = genAI.getGenerativeModel({
+            model: cModelName,
             systemInstruction: systemInstruction,
           });
 
-          const chat = model.startChat({ history: formattedHistory });
+          const chat = chatModel.startChat({ history: formattedHistory });
           const result = await chat.sendMessage(message);
           const response = await result.response;
           const replyText = response.text();
 
           if (replyText) {
-            console.log(`[Gemini API] Successfully generated response using model: ${modelName}`);
+            console.log(`[Dr. Bustan Pure Chat Engine - ${cModelName}] Generated response successfully.`);
             return NextResponse.json({ reply: replyText });
           }
-        } catch (modelErr) {
-          console.warn(`[Gemini API] Model '${modelName}' call failed, trying next candidate:`, modelErr);
+        } catch (cErr) {
+          console.warn(`[Dr. Bustan Pure Chat Engine - ${cModelName}] Candidate error:`, cErr);
         }
       }
     }
@@ -114,40 +132,53 @@ ${childrenContext}
 
     let fallbackReply = "";
 
-    // 1. Direct answer for Trauma / Trauma recovery queries (أبنائي / صدمة / صدمات)
-    if (userQuery.includes("صدمة") || userQuery.includes("صدمات") || userQuery.includes("تجاوز الصدمات")) {
+    // 1. Direct answer for Status / Children Progress queries (حالة أبنائي / أطفالي / تقدم)
+    if (userQuery.includes("حالة") || userQuery.includes("أبنائي") || userQuery.includes("أطفالي") || userQuery.includes("تقدم") || userQuery.includes("اخبرني")) {
+      const summaryList = childrenList
+        .map((c: any) => {
+          const name = c.name || c.childName || "طفلك";
+          const starsCount = c.stars || 0;
+          const oddProg = c.oddCompleted ?? c.completedOddSessions ?? 0;
+          const memProg = c.memoryCompleted ?? c.completedMemorySessions ?? 0;
+          let noteStr = "";
+          if (Array.isArray(c.behavioralNotes) && c.behavioralNotes.length > 0) {
+            noteStr = `\n  - *ملاحظات سلوكية*: ${c.behavioralNotes[c.behavioralNotes.length - 1]?.note || c.behavioralNotes[c.behavioralNotes.length - 1]?.text}`;
+          }
+          return `• **${name}**: جمع **${starsCount} نجمة ⭐**، أتم **${oddProg}/7 حصص** في المناعة النفسية ODD، و**${memProg}/11 جلسة** في الذاكرة.${noteStr}`;
+        })
+        .join("\n\n");
+
+      fallbackReply = `${greeting}إليك تحليل ومتابعة حالة أبنائك في منصة بستان:\n\n${summaryList}\n\nنوصي بمواصلة استخدام "لوحة النجوم" لتعزيز السلوك الإيجابي وممارسة ألعاب روضة بستان يومياً 🚀.`;
+    }
+    // 2. Direct answer for Trauma recovery
+    else if (userQuery.includes("صدمة") || userQuery.includes("صدمات") || userQuery.includes("تجاوز الصدمات")) {
       fallbackReply = `${greeting}مساعدة الأطفال على تجاوز الصدمات النفسية تتطلب بيئة آمنة وخطوات رفيقة:\n\n` +
-        `• **الشعور بالأمان والأمان العاطفي**: طمئناهم دائماً بأنهم في أمان وأنهم ليسوا وحدهم، واستمع لمشاعرهم بدون تحقير أو استهانة.\n` +
-        `• **التعبير الحر**: شجعهم على التعبير عن مشاعرهم سواء بالكلام، الرسم، أو اللعب التخيلي.\n` +
-        `• **الروتين والانتظام**: الحفاظ على جدول يومي مستقر ومنتظم يمنح الطفل شعوراً بالأمان والسيطرة على بيئته.\n` +
-        `• **الصبر والهدوء**: تجنب الاستعجال في تعافيهم، وأحيطهم بالحب والدفء العائلي.\n\n` +
-        `في حال استمرار أعراض القلق الشديد أو الكوابيس، يُنصح دائماً بمراجعة أخصائي نفسي متخصص للتعامل المباشر مع الصدمة.`;
+        `• **الأمان العاطفي**: طمئناهم دائماً بأنهم في أمان وأنهم ليسوا وحدهم، واستمع لمشاعرهم بدون تحقير.\n` +
+        `• **التعبير الحر**: شجعهم على التعبير عن مشاعرهم سواء بالكلام، الرسم، أو ألعاب روضة بستان.\n` +
+        `• **الروتين والانتظام**: الحفاظ على جدول يومي مستقر يمنح الطفل شعوراً بالأمان والسيطرة على بيئته.\n` +
+        `• **التحفيز بالنجوم**: استخدم "لوحة النجوم والمكافآت" لتشجيعهم على الالتزام بالروتين.\n\n` +
+        `في حال استمرار أعراض القلق الشديد، يُنصح بمراجعة أخصائي نفسي متخصص.`;
     }
-    // 2. Direct answer for Stubbornness / Anger queries
+    // 3. Direct answer for Stubbornness / Anger queries
     else if (userQuery.includes("عناد") || userQuery.includes("عصبية") || userQuery.includes("غضب") || userQuery.includes("صراخ")) {
-      fallbackReply = `${greeting}التعامل مع انفعالات وعناد الأطفال يتطلب الموازنة بين الحزم والاحتواء:\n\n` +
-        `• **الإنصات قبل التوجيه**: استمع لما يضايق الطفل وهدّئ من نبرة صوتك قبل إعطاء أي توجيه.\n` +
-        `• **تقديم خيارين محددين**: بدلاً من الأوامر الحادة، خيّر الطفل بين خيارين مقبولين لديك.\n` +
-        `• **التنفس والتهدئة**: شجعه على أخذ أنفاس عميقة قبل الاستجابة بالصراخ.\n` +
-        `• **التعزيز الإيجابي**: اثنِ على هدوء الطفل وتصرفه السليم فور حدوثه لتكرار السلوك الجيد.`;
+      fallbackReply = `${greeting}التعامل مع انفعالات وعناد ${currentActiveChild} يتطلب الموازنة بين الحزم والاحتواء:\n\n` +
+        `• **الإنصات والتنفس**: استعن بتمرين التنفس العميق في الحصة 3 من برنامج ODD لتهدئة الانفعال.\n` +
+        `• **تقديم خيارين محددين**: بدلاً من الأوامر الحادة، خيّره بين خيارين مقبولين لديك.\n` +
+        `• **التحفيز الإيجابي**: استخدم "لوحة النجوم" لمكافأته عندما يلتزم بالهدوء.`;
     }
-    // 3. Direct answer for Motivation / Encouragement queries
+    // 4. Direct answer for Motivation / Encouragement queries
     else if (userQuery.includes("تحفيز") || userQuery.includes("تشجيع") || userQuery.includes("نجوم") || userQuery.includes("مكافأة")) {
-      fallbackReply = `${greeting}لتحفيز أطفالك وتشجيعهم على السلوكيات الإيجابية:\n\n` +
-        `• **الثناء المباشر والمحدد**: بدلاً من "أنت شاطر"، قل "أنا فخور بك لأنك نظفت غرفتك بنفسك".\n` +
-        `• **المكافآت المعنوية والتشاركية**: قضاء وقت ممتع معهم أو ممارسة نشاط يحبونه كربط للنجاح.\n` +
-        `• **جداول التعزيز والرموز**: استخدام لوحة المكافآت لتحديد أهداف أسبوعية يطمحون لتحقيقها.`;
-    }
-    // 4. Direct answer for Breathing / Relaxation queries
-    else if (userQuery.includes("تنفس") || userQuery.includes("هدوء") || userQuery.includes("استرخاء")) {
-      fallbackReply = `${greeting}تمارين التنفس العميق أداة ممتازة لتهدئة الجهاز العصبي للأطفال:\n\n` +
-        `1. **تمرين 4-2-4**: خذ نفساً عميقاً من الأنف (4 ثوانٍ)، احبس النفس (ثانيتان)، ثم أخرج الزفير ببطء من الفم (4 ثوانٍ).\n` +
-        `2. **المشاركة**: مارس التمرين معهم ليشعروا بالدفء والتقليد الإيجابي.\n` +
-        `3. **التكرار**: اجعل التنفس روتيناً قبل النوم أو عند شعورهم بالتوتر.`;
+      fallbackReply = `${greeting}لتحفيز ${currentActiveChild} وإخوته بشكل فعّال:\n\n` +
+        `• **الثناء المباشر**: أثنِ عليه مباشرة عند القيام بسلوك إيجابي.\n` +
+        `• **لوحة النجوم**: حدد هدفاً أسبوعياً وافتح له مجال استبدال النجوم بمكافآت معنوية أو عائلية.\n` +
+        `• **ألعاب الروضة**: شجعه على ممارسة ألعاب المطابقة وتتبع المسارات لربط التعلم بالمرح 🚀.`;
     }
     // 5. General fallback
     else {
-      fallbackReply = `${greeting}يسعدني مساندتك يا أستاذ ${parentName} في أي استفسار تربوي أو نفسي يتعلق بطفلك وإخوته.\n\nكيف يمكنني مساعدتك اليوم في الإجابة عن تساؤلك بالتحديد؟`;
+      const activeChildObj = childrenList.find((c: any) => (c.name || "").includes(currentActiveChild)) || childrenList[0];
+      fallbackReply = `${greeting}بناءً على سجل ${currentActiveChild} في المنصة (جمع ${activeChildObj?.stars || 0} نجمة ⭐ وأنجز ${activeChildObj?.oddCompleted || 0} حصص ODD):\n\n` +
+        `• نوصي بالدمج بين أدوات المنصة (لوحة النجوم، تمارين التنفس، وألعاب الروضة) والروتين المنزلي المستقر.\n\n` +
+        `كيف يمكنني مساعدتك في أي استفسار تربوي أو نفسي محدد؟`;
     }
 
     return NextResponse.json({ reply: fallbackReply });

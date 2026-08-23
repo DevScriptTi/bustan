@@ -2,8 +2,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { Mail, Lock, LogIn, ArrowRight, Loader2 } from "lucide-react";
 
 export default function ParentLogin() {
@@ -25,8 +26,30 @@ export default function ParentLogin() {
 
     try {
       setLoading(true);
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.push("/dashboard");
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+
+      // Fetch user role from Firestore
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      let userRole = "parent";
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        userRole = userData.role || "parent";
+      }
+
+      // Set cookie for middleware role validation
+      document.cookie = `user_role=${userRole}; path=/; max-age=86400; SameSite=Lax`;
+
+      // Conditional Role-Based Routing
+      if (userRole === "psychologist") {
+        router.push("/psychologist/dashboard");
+      } else if (userRole === "admin") {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (error: any) {
       // Handle Firebase auth errors gracefully without triggering overlay issues
       const errorCode = error?.code || "";

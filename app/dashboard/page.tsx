@@ -11,7 +11,11 @@ import {
   where,
   onSnapshot,
   addDoc,
+  doc,
+  updateDoc,
+  arrayUnion,
   serverTimestamp,
+  getDocs,
 } from "firebase/firestore";
 import {
   UserPlus,
@@ -30,6 +34,8 @@ import {
   Loader2,
   RotateCcw,
   Sparkles,
+  Stethoscope,
+  Search,
 } from "lucide-react";
 
 export interface ChildActivity {
@@ -52,6 +58,12 @@ export interface Child {
   totalMemorySessions?: number;
   completedOddSessions?: number;
   totalOddSessions?: number;
+  behavioralNotes?: Array<{ date?: string; note?: string; text?: string; author?: string }>;
+  reviewStatus?: "none" | "pending" | "accepted" | "rejected";
+  assignedPsychologistId?: string;
+  pendingReviewWith?: string;
+  pendingReviewWithName?: string;
+  psychologistDirectives?: string;
   activities?: ChildActivity[];
   createdAt?: any;
 }
@@ -64,6 +76,7 @@ const recentActivities = [
 
 import OddStarBoardModal from "@/components/OddStarBoardModal";
 import CounselorChat from "@/components/CounselorChat";
+import DirectChatModal from "@/components/DirectChatModal";
 
 export default function DashboardHome() {
   const { user } = useAuth();
@@ -76,6 +89,7 @@ export default function DashboardHome() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isStarBoardModalOpen, setIsStarBoardModalOpen] = useState(false);
   const [newChildName, setNewChildName] = useState("");
+  const [newChildBehavioralNote, setNewChildBehavioralNote] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -137,15 +151,23 @@ export default function DashboardHome() {
   /* ── 3. Handle Add Child Submission ── */
   const handleAddChild = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newChildName.trim() || !user) return;
+    if (!newChildName.trim() || !newChildBehavioralNote.trim() || !user) return;
 
     setIsAdding(true);
     setAddError("");
 
     try {
+      const initialNotes = [
+        {
+          date: new Date().toISOString(),
+          note: newChildBehavioralNote.trim(),
+        },
+      ];
+
       await addDoc(collection(db, "children"), {
         parentId: user.uid,
         name: newChildName.trim(),
+        behavioralNotes: initialNotes,
         stars: 0,
         memoryEvalDone: false,
         needsMemoryTherapy: false,
@@ -155,12 +177,125 @@ export default function DashboardHome() {
       });
 
       setNewChildName("");
+      setNewChildBehavioralNote("");
       setIsAddModalOpen(false);
     } catch (err: any) {
       console.error("Error adding child:", err);
       setAddError("حدث خطأ أثناء إضافة الطفل، يرجى المحاولة لاحقاً.");
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  /* ── 4. Handle Update Child State Submission ── */
+  const [isUpdateStateModalOpen, setIsUpdateStateModalOpen] = useState(false);
+  const [newUpdateNote, setNewUpdateNote] = useState("");
+  const [isSavingUpdate, setIsSavingUpdate] = useState(false);
+
+  const handleUpdateChildState = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChild || !newUpdateNote.trim()) return;
+
+    setIsSavingUpdate(true);
+    try {
+      const res = await fetch("/api/update-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          childId: activeChild.id,
+          childName: activeChild.name,
+          rawText: newUpdateNote.trim(),
+          parentName: user?.displayName || "فوزي جعفري",
+        }),
+      });
+
+      if (!res.ok) {
+        // Fallback client update if endpoint unavailable
+        const newEntry = {
+          date: new Date().toISOString(),
+          note: newUpdateNote.trim(),
+          author: "parent",
+        };
+        const childRef = doc(db, "children", activeChild.id);
+        await updateDoc(childRef, {
+          behavioralNotes: arrayUnion(newEntry),
+        });
+      }
+
+      setNewUpdateNote("");
+      setIsUpdateStateModalOpen(false);
+    } catch (err) {
+      console.error("Error updating child state:", err);
+    } finally {
+      setIsSavingUpdate(false);
+    }
+  };
+
+  /* ── 5. Handle Request Specialist Review & Doctor Selection ── */
+  interface DoctorUser {
+    uid: string;
+    fullName?: string;
+    username?: string;
+    phoneNumber?: string;
+  }
+
+  const [isSelectDoctorModalOpen, setIsSelectDoctorModalOpen] = useState(false);
+  const [doctorsList, setDoctorsList] = useState<DoctorUser[]>([]);
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState("");
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [sendingRequestToId, setSendingRequestToId] = useState<string | null>(null);
+  const [isDirectChatOpen, setIsDirectChatOpen] = useState(false);
+
+  const handleOpenSelectDoctorModal = async () => {
+    if (!activeChild) return;
+    setIsSelectDoctorModalOpen(true);
+    setLoadingDoctors(true);
+    try {
+      const q = query(collection(db, "users"), where("role", "==", "psychologist"));
+      const snap = await getDocs(q);
+      const list: DoctorUser[] = snap.docs.map((d) => ({
+        uid: d.id,
+        fullName: d.data().fullName || d.data().name || "أخصائي نفسي معتمد",
+        username: d.data().username || "",
+        phoneNumber: d.data().phoneNumber || "",
+      }));
+      setDoctorsList(list);
+    } catch (e) {
+      console.error("Error fetching doctors list:", e);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  const handleSendRequestToDoctor = async (docUser: DoctorUser) => {
+    if (!activeChild) return;
+    setSendingRequestToId(docUser.uid);
+    try {
+      const docName = docUser.fullName || "أخصائي نفسي";
+      const childRef = doc(db, "children", activeChild.id);
+      await updateDoc(childRef, {
+        reviewStatus: "pending",
+        pendingReviewWith: docUser.uid,
+        pendingReviewWithName: docName,
+      });
+
+      setActiveChild((prev) =>
+        prev
+          ? {
+              ...prev,
+              reviewStatus: "pending",
+              pendingReviewWith: docUser.uid,
+              pendingReviewWithName: docName,
+            }
+          : null
+      );
+
+      setIsSelectDoctorModalOpen(false);
+      playSound("sparkle");
+    } catch (err) {
+      console.error("Error sending review request:", err);
+    } finally {
+      setSendingRequestToId(null);
     }
   };
 
@@ -194,12 +329,22 @@ export default function DashboardHome() {
             </p>
           </div>
 
-          <Link
-            href="/kindergarten"
-            className="inline-flex items-center gap-2 px-5 py-3.5 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 cursor-pointer border border-amber-300 flex-shrink-0"
-          >
-            <span>🏫 روضة بستان للأطفال</span>
-          </Link>
+          <div className="flex items-center gap-3 flex-wrap flex-shrink-0">
+            <Link
+              href="/dashboard/specialists"
+              className="inline-flex items-center gap-2 px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 cursor-pointer border border-indigo-500"
+            >
+              <Stethoscope size={18} />
+              <span>دليل الأخصائيين النفسيين</span>
+            </Link>
+
+            <Link
+              href="/kindergarten"
+              className="inline-flex items-center gap-2 px-5 py-3.5 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 cursor-pointer border border-amber-300"
+            >
+              <span>🏫 روضة بستان للأطفال</span>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -308,22 +453,61 @@ export default function DashboardHome() {
           ) : (
             <>
               {/* Active Child Header */}
-              <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-                <div className="w-14 h-14 bg-teal-100 rounded-2xl flex items-center justify-center text-3xl shadow-sm flex-shrink-0">
-                  {childEmoji(activeChild.name)}
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-2xl font-black text-slate-800">{activeChild.name}</h3>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-black bg-amber-100 text-amber-700">
-                      <Star size={10} fill="currentColor" />
-                      {activeChild.stars} نجمة
-                    </span>
-                    {(() => {
-                      const { label, color } = statusLabel(activeChild);
-                      return <span className={`text-xs px-2.5 py-1 rounded-full font-black ${color}`}>{label}</span>;
-                    })()}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-teal-100 rounded-2xl flex items-center justify-center text-3xl shadow-sm flex-shrink-0">
+                    {childEmoji(activeChild.name)}
                   </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-black text-slate-800">{activeChild.name}</h3>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-black bg-amber-100 text-amber-700">
+                        <Star size={10} fill="currentColor" />
+                        {activeChild.stars} نجمة
+                      </span>
+                      {(() => {
+                        const { label, color } = statusLabel(activeChild);
+                        return <span className={`text-xs px-2.5 py-1 rounded-full font-black ${color}`}>{label}</span>;
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => { playSound("pop"); setIsUpdateStateModalOpen(true); }}
+                    className="px-3.5 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    <Activity size={15} className="text-teal-600" />
+                    <span>تحديث حالة الطفل</span>
+                  </button>
+
+                  {/* Review Request System & Direct Chat Controls */}
+                  {activeChild.reviewStatus === "pending" ? (
+                    <span className="px-3.5 py-2 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm animate-pulse">
+                      ⏳ طلب المراجعة قيد الانتظار عند: {activeChild.pendingReviewWithName || "الأخصائي"}
+                    </span>
+                  ) : activeChild.reviewStatus === "accepted" ? (
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-2 bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm">
+                        🩺 معتمد من أخصائي
+                      </span>
+                      <button
+                        onClick={() => { playSound("pop"); setIsDirectChatOpen(true); }}
+                        className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        💬 دردشة الأخصائي المباشرة
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { playSound("pop"); handleOpenSelectDoctorModal(); }}
+                      className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Stethoscope size={15} className="text-indigo-600" />
+                      <span>طلب مراجعة من أخصائي</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -684,12 +868,26 @@ export default function DashboardHome() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                  وصف حالة الطفل وسلوكه (ضروري جداً للمستشار)
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={newChildBehavioralNote}
+                  onChange={(e) => setNewChildBehavioralNote(e.target.value)}
+                  placeholder="صف مخاوفه، نقاط قوته، وما يزعجك في سلوكه بصراحة..."
+                  className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-teal-500 focus:outline-none transition-colors font-bold text-slate-800 bg-slate-50/50 resize-none text-xs sm:text-sm"
+                />
+              </div>
+
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={isAdding || !newChildName.trim()}
+                  disabled={isAdding || !newChildName.trim() || !newChildBehavioralNote.trim()}
                   className={`flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
-                    isAdding || !newChildName.trim() ? "opacity-60 cursor-not-allowed" : ""
+                    isAdding || !newChildName.trim() || !newChildBehavioralNote.trim() ? "opacity-60 cursor-not-allowed" : ""
                   }`}
                 >
                   {isAdding ? (
@@ -722,6 +920,104 @@ export default function DashboardHome() {
         </div>
       )}
 
+      {/* Update Child State Modal */}
+      {isUpdateStateModalOpen && activeChild && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in" dir="rtl">
+          <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg rounded-none sm:rounded-3xl bg-white p-6 sm:p-8 space-y-6 shadow-2xl relative border-none sm:border border-slate-100 overflow-y-auto flex flex-col justify-between sm:justify-start">
+            <button
+              onClick={() => setIsUpdateStateModalOpen(false)}
+              className="absolute top-5 left-5 p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors z-10"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex flex-col items-center text-center space-y-2 pt-2 sm:pt-0">
+              <div className="w-14 h-14 bg-teal-100 text-teal-700 rounded-2xl flex items-center justify-center text-3xl shadow-sm">
+                📝
+              </div>
+              <h3 className="text-2xl font-black text-slate-800">تحديث حالة الطفل ({activeChild.name})</h3>
+              <p className="text-slate-500 font-medium text-xs">
+                أدخل أي ملاحظات أو سلوكيات جديدة للطفل ليأخذها المستشار الذكي في الاعتبار
+              </p>
+            </div>
+
+            {/* Clinical Disclaimer Banner */}
+            <div className="bg-blue-50 text-blue-800 p-3.5 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed border border-blue-100 flex items-start gap-3 text-right">
+              <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-xl flex items-center justify-center flex-shrink-0 text-base shadow-sm font-bold">
+                💡
+              </div>
+              <div className="flex-1">
+                <p className="font-black text-blue-950 mb-0.5 text-xs sm:text-sm">نصيحة للمتابعة:</p>
+                <p className="font-medium text-blue-800 text-xs leading-relaxed">
+                  يُفضل أن تناقش تطورات طفلك ومشاكله اليومية مع <strong>&quot;د. بستان&quot;</strong> في الدردشة بدلاً من كتابتها هنا؛ ليقوم هو باستنتاجها وتحديثها برؤية خبير بعد إنهاء الجلسة. التحديث اليدوي المباشر يُنصح به فقط إذا كان بناءً على توجيه من طبيب أو مستشار نفسي بشري.
+                </p>
+              </div>
+            </div>
+
+            {/* Latest Existing Behavioral Note Quote */}
+            {(() => {
+              const notes = activeChild.behavioralNotes || [];
+              const latest = notes.length > 0 ? notes[notes.length - 1] : null;
+              if (!latest) return null;
+              return (
+                <div className="bg-slate-50 border-r-4 border-teal-500 p-4 rounded-xl space-y-1 text-right">
+                  <p className="text-xs font-bold text-slate-400">
+                    آخر ملاحظة مسجلة ({latest.author === "ai_agent" ? "المستشار الذكي 🤖" : "الوالدين 👤"}):
+                  </p>
+                  <p className="text-sm font-semibold text-slate-700 leading-relaxed">
+                    "{latest.note || (latest as any).text}"
+                  </p>
+                </div>
+              );
+            })()}
+
+            <form onSubmit={handleUpdateChildState} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                  التطورات أو السلوكيات الجديدة اليوم
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={newUpdateNote}
+                  onChange={(e) => setNewUpdateNote(e.target.value)}
+                  placeholder="مثال: يرفض أداء الواجبات، أصبح يلتزم بتمرين التنفس عند الغضب..."
+                  className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-teal-500 focus:outline-none transition-colors font-bold text-slate-800 bg-slate-50/50 resize-none text-xs sm:text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingUpdate || !newUpdateNote.trim()}
+                  className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isSavingUpdate ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>جاري الحفظ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} />
+                      <span>حفظ التحديث السلوكي</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsUpdateStateModalOpen(false)}
+                  className="px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all cursor-pointer text-sm"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Star Board Modal */}
       <OddStarBoardModal
         isOpen={isStarBoardModalOpen}
@@ -732,11 +1028,149 @@ export default function DashboardHome() {
       <CounselorChat
         parentName={user?.displayName || "فوزي جعفري"}
         childrenList={children}
+        childId={activeChild?.id}
         childName={activeChild?.name}
         completedOddSessions={activeChild?.completedOddSessions}
         completedMemorySessions={activeChild?.completedMemorySessions}
         stars={activeChild?.stars}
       />
+
+      {/* Direct Chat Modal with Psychologist */}
+      {user && activeChild && (
+        <DirectChatModal
+          isOpen={isDirectChatOpen}
+          onClose={() => setIsDirectChatOpen(false)}
+          childId={activeChild.id}
+          childName={activeChild.name}
+          currentUserId={user.uid}
+          currentUserRole="parent"
+          currentUserName={user?.displayName || "فوزي جعفري"}
+        />
+      )}
+
+      {/* Psychologist Selection Modal */}
+      {isSelectDoctorModalOpen && activeChild && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in dir-rtl" dir="rtl">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full space-y-6 shadow-2xl relative border border-slate-100 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center text-2xl font-black shadow-sm">
+                  🩺
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">دليل الأخصائيين النفسيين المعتمدين</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    اختر الأخصائي المناسب لطلب مراجعة سريرية لـ ({activeChild.name})
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsSelectDoctorModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Doctor Search Filter */}
+            <div className="relative">
+              <Search size={18} className="absolute right-4 top-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={doctorSearchQuery}
+                onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                placeholder="ابحث باسم الأخصائي، اسم المستخدم @username، أو رقم الهاتف..."
+                className="w-full pl-4 pr-11 py-3 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:outline-none rounded-2xl text-xs sm:text-sm font-bold text-slate-800"
+              />
+            </div>
+
+            {/* Doctors List */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {loadingDoctors ? (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
+                  <Loader2 size={28} className="animate-spin text-indigo-600" />
+                  <span className="text-xs font-bold">جاري تحميل قائمة الأخصائيين...</span>
+                </div>
+              ) : doctorsList.filter((d) => {
+                  const q = doctorSearchQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    (d.fullName || "").toLowerCase().includes(q) ||
+                    (d.username || "").toLowerCase().includes(q) ||
+                    (d.phoneNumber || "").toLowerCase().includes(q)
+                  );
+                }).length === 0 ? (
+                <div className="py-12 text-center text-slate-400 space-y-2">
+                  <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto text-xl">
+                    🩺
+                  </div>
+                  <p className="font-bold text-sm text-slate-700">لم يتم العثور على أخصائي مطابقة للبحث</p>
+                </div>
+              ) : (
+                doctorsList
+                  .filter((d) => {
+                    const q = doctorSearchQuery.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      (d.fullName || "").toLowerCase().includes(q) ||
+                      (d.username || "").toLowerCase().includes(q) ||
+                      (d.phoneNumber || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((docUser) => (
+                    <div
+                      key={docUser.uid}
+                      className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between gap-4 hover:border-indigo-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-base shadow-sm">
+                          🩺
+                        </div>
+                        <div>
+                          <p className="font-black text-slate-800 text-sm">{docUser.fullName}</p>
+                          {docUser.username && (
+                            <p className="text-xs text-indigo-600 font-mono dir-ltr text-right">
+                              @{docUser.username}
+                            </p>
+                          )}
+                          {docUser.phoneNumber && (
+                            <p className="text-[11px] text-slate-400 font-mono dir-ltr text-right">
+                              {docUser.phoneNumber}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleSendRequestToDoctor(docUser)}
+                        disabled={sendingRequestToId === docUser.uid}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+                      >
+                        {sendingRequestToId === docUser.uid ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Sparkles size={14} />
+                        )}
+                        <span>إرسال الطلب</span>
+                      </button>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSelectDoctorModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
