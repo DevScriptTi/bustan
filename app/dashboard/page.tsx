@@ -584,7 +584,7 @@ export default function DashboardHome() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Activity size={18} className="text-indigo-600" />
-                  <h4 className="font-black text-slate-700 text-base">برنامج زيادة المناعة النفسية للأطفال (ODD)</h4>
+                  <h4 className="font-black text-slate-700 text-base">برنامج مقياس العناد المتحدي odd</h4>
                   <div className="h-px flex-1 bg-slate-100"></div>
                   {activeChild.oddEvalDone && <CheckCircle size={15} className="text-emerald-500" />}
                 </div>
@@ -606,7 +606,7 @@ export default function DashboardHome() {
                     <ClipboardCheck size={22} className="text-slate-500 group-hover:text-indigo-600 flex-shrink-0 transition-colors" />
                     <div className="flex-1 text-right">
                       <p className="text-xs text-slate-400 font-bold">الخطوة 2 — بعد تقييم الذاكرة</p>
-                      <p className="text-base">تقييم المناعة النفسية للأطفال (ODD)</p>
+                      <p className="text-base">تقييم مقياس العناد المتحدي odd</p>
                     </div>
                     <ChevronLeft size={16} className="text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
                   </Link>
@@ -616,7 +616,7 @@ export default function DashboardHome() {
                 {activeChild.oddEvalDone && (
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm font-bold">
                     <CheckCircle size={15} className="flex-shrink-0" />
-                    <span>تقييم المناعة النفسية (ODD) مكتمل ✅</span>
+                    <span>تقييم مقياس العناد المتحدي odd مكتمل ✅</span>
                   </div>
                 )}
 
@@ -632,7 +632,7 @@ export default function DashboardHome() {
                       </div>
                       <div className="flex-1 text-right">
                         <p className="text-white/70 text-xs font-bold">7 حصص علاجية</p>
-                        <p>متابعة جلسات زيادة المناعة النفسية (ODD)</p>
+                        <p>متابعة جلسات برنامج مقياس العناد المتحدي odd</p>
                       </div>
                       <ChevronLeft size={18} className="opacity-70 flex-shrink-0" />
                     </Link>
@@ -654,7 +654,7 @@ export default function DashboardHome() {
                 {activeChild.oddEvalDone && !activeChild.needsOddTherapy && (
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-sm font-bold">
                     <HeartHandshake size={15} className="flex-shrink-0" />
-                    <span>لا يحتاج {activeChild.name} لبرنامج زيادة المناعة النفسية (ODD) حالياً 🌟</span>
+                    <span>لا يحتاج {activeChild.name} لبرنامج مقياس العناد المتحدي odd حالياً 🌟</span>
                   </div>
                 )}
 
@@ -665,7 +665,7 @@ export default function DashboardHome() {
                     className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold rounded-xl border border-slate-200 transition-all cursor-pointer text-xs"
                   >
                     <RotateCcw size={14} />
-                    <span>إعادة تقييم المناعة النفسية (ODD)</span>
+                    <span>إعادة تقييم مقياس العناد المتحدي odd</span>
                   </Link>
                 )}
               </div>
@@ -740,7 +740,7 @@ export default function DashboardHome() {
 
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs font-bold text-slate-600">
-                    <span>تقييم المناعة النفسية (ODD)</span>
+                    <span>تقييم مقياس العناد المتحدي odd</span>
                     <span>{activeChild.oddEvalDone ? "مكتمل ✅" : activeChild.memoryEvalDone ? "بانتظارك" : "مقفل"}</span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5">
@@ -750,7 +750,7 @@ export default function DashboardHome() {
 
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs font-bold text-slate-600">
-                    <span>برنامج زيادة المناعة النفسية (ODD) ({completedOdd} / {totalOdd} حصص)</span>
+                    <span>برنامج مقياس العناد المتحدي odd ({completedOdd} / {totalOdd} حصص)</span>
                     <span>{activeChild.needsOddTherapy ? `${oddPercent}%` : activeChild.oddEvalDone ? "غير مطلوب" : "مقفل"}</span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5">
